@@ -3,11 +3,9 @@
 from unittest import mock
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bluetooth_speaker.bluez import Loa, Pcm
 from custom_components.bluetooth_speaker.const import DOMAIN

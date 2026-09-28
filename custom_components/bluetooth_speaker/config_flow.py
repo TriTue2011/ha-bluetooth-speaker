@@ -5,8 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 

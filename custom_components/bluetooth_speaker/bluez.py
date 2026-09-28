@@ -79,31 +79,31 @@ class _Agent(ServiceInterface):
         super().__init__("org.bluez.Agent1")
 
     @method()
-    def Release(self):  # noqa: N802
+    def Release(self):
         pass
 
     @method()
-    def RequestConfirmation(self, device: "o", passkey: "u"):  # noqa: F821,N802
+    def RequestConfirmation(self, device: o, passkey: u):  # noqa: F821
         pass
 
     @method()
-    def RequestAuthorization(self, device: "o"):  # noqa: F821,N802
+    def RequestAuthorization(self, device: o):  # noqa: F821
         pass
 
     @method()
-    def AuthorizeService(self, device: "o", uuid: "s"):  # noqa: F821,N802
+    def AuthorizeService(self, device: o, uuid: s):  # noqa: F821
         pass
 
     @method()
-    def RequestPinCode(self, device: "o") -> "s":  # noqa: F821,N802
+    def RequestPinCode(self, device: o) -> s:  # noqa: F821
         return "0000"
 
     @method()
-    def RequestPasskey(self, device: "o") -> "u":  # noqa: F821,N802
+    def RequestPasskey(self, device: o) -> u:  # noqa: F821
         return 0
 
     @method()
-    def Cancel(self):  # noqa: N802
+    def Cancel(self):
         pass
 
 
@@ -245,8 +245,8 @@ class BluezClient:
                      # KHÔNG nghe ObjectManager của BlueZ: HA quét BLE làm thiết bị hiện/mất
                      # liên tục (hàng trăm tín hiệu/giờ). Ghép đôi, kết nối đổi thuộc tính;
                      # quên loa do chính tích hợp gọi rồi tự làm mới.
-                     "type='signal',sender='org.bluez',"
-                     "interface='org.freedesktop.DBus.Properties',arg0='org.bluez.Device1'"):
+                     ("type='signal',sender='org.bluez',"
+                      "interface='org.freedesktop.DBus.Properties',arg0='org.bluez.Device1'")):
             await self._call("/org/freedesktop/DBus", "org.freedesktop.DBus", "AddMatch", "s",
                              [rule], dest="org.freedesktop.DBus")
 
