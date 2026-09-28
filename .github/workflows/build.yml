@@ -1,0 +1,56 @@
+name: Test integration
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test on Home Assistant (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.13 → the last HA release for 3.13 (older installs); 3.14 → current HA.
+        python: ["3.13", "3.14"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install Home Assistant test harness
+        run: |
+          python -m pip install pytest-homeassistant-custom-component
+          # Assist pipeline, conversation, TTS and ffmpeg need these at import time.
+          # Install the EXACT versions this Home Assistant pins in each component's
+          # manifest — the latest releases can drift (a newer hassil broke imports).
+          python -m pip install $(python - <<'PY'
+          import json, os, homeassistant
+          base = os.path.join(os.path.dirname(homeassistant.__file__), "components")
+          reqs = []
+          for comp in ("assist_pipeline", "conversation", "ffmpeg", "tts"):
+              reqs += json.load(open(os.path.join(base, comp, "manifest.json"))).get("requirements", [])
+          print(" ".join(sorted(set(reqs))))
+          PY
+          )
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Validate JSON files
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          for p in pathlib.Path(".").rglob("*.json"):
+              json.load(open(p, encoding="utf-8"))
+          PY

@@ -1,0 +1,64 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Loa Bluetooth",
+        "description": "Phát ra loa Bluetooth (A2DP) từ Home Assistant, không cần add-on. Máy có bộ Bluetooth phải chạy BlueZ và bluez-alsa, và Home Assistant phải thấy D-Bus của máy (/run/dbus). Bấm Gửi để kiểm."
+      }
+    },
+    "error": {
+      "no_dbus": "Không tới được D-Bus hệ thống. Gắn /run/dbus vào container Home Assistant.",
+      "no_adapter": "BlueZ không có bộ Bluetooth nào. Cài và chạy bluez trên máy có bộ Bluetooth.",
+      "no_bluealsa": "bluez-alsa chưa chạy. Cài bluez-alsa-utils và bật dịch vụ bluealsa."
+    },
+    "abort": {
+      "already_configured": "Đã cài rồi.",
+      "single_instance_allowed": "Đã cài rồi."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Loa Bluetooth",
+        "menu_options": {
+          "scan": "Quét và kết nối loa mới",
+          "forget": "Quên một loa"
+        }
+      },
+      "scan": {
+        "title": "Quét loa",
+        "description": "Bật chế độ ghép đôi trên loa (giữ nút Bluetooth tới khi đèn nháy nhanh) và tắt Bluetooth trên điện thoại đang nối với loa. Bấm Gửi để quét {giay} giây."
+      },
+      "pick": {
+        "title": "Chọn loa",
+        "description": "Lần kết nối đầu sẽ ghép đôi và đánh dấu tin cậy. {loi}",
+        "data": {
+          "speaker": "Loa"
+        }
+      },
+      "forget": {
+        "title": "Quên một loa",
+        "description": "Xoá ghép đôi; muốn dùng lại phải ghép đôi lại.",
+        "data": {
+          "speaker": "Loa"
+        }
+      }
+    },
+    "error": {
+      "connect_failed": "Không ghép đôi / kết nối được. Bật lại chế độ ghép đôi trên loa rồi thử lại."
+    },
+    "abort": {
+      "nothing_found": "Không thấy loa nào. Kiểm loa đang ở chế độ ghép đôi và để gần bộ Bluetooth, rồi quét lại.",
+      "nothing_paired": "Chưa có loa nào ghép đôi.",
+      "scan_failed": "Quét lỗi: {loi}",
+      "forget_failed": "Không quên được loa: {loi}"
+    }
+  },
+  "entity": {
+    "media_player": {
+      "all_speakers": {
+        "name": "Tất cả loa Bluetooth"
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bluetooth Speaker",
+        "description": "Play to Bluetooth (A2DP) speakers from Home Assistant, no add-on needed. The machine with the Bluetooth adapter must run BlueZ and bluez-alsa, and Home Assistant must see its system D-Bus (/run/dbus). Press Submit to check."
+      }
+    },
+    "error": {
+      "no_dbus": "Cannot reach the system D-Bus. Mount /run/dbus into the Home Assistant container.",
+      "no_adapter": "BlueZ has no Bluetooth adapter. Install and start bluez on the machine with the adapter.",
+      "no_bluealsa": "bluez-alsa is not running. Install bluez-alsa-utils and start the bluealsa service."
+    },
+    "abort": {
+      "already_configured": "Already configured.",
+      "single_instance_allowed": "Already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Bluetooth speakers",
+        "menu_options": {
+          "scan": "Scan and connect a new speaker",
+          "forget": "Forget a speaker"
+        }
+      },
+      "scan": {
+        "title": "Scan",
+        "description": "Put the speaker in pairing mode (hold its Bluetooth button until the light blinks fast) and turn Bluetooth off on phones connected to it. Press Submit to scan for {giay} seconds."
+      },
+      "pick": {
+        "title": "Choose the speaker",
+        "description": "The first connection pairs the speaker and marks it trusted. {loi}",
+        "data": {
+          "speaker": "Speaker"
+        }
+      },
+      "forget": {
+        "title": "Forget a speaker",
+        "description": "Removes the pairing; the speaker must be paired again to be used.",
+        "data": {
+          "speaker": "Speaker"
+        }
+      }
+    },
+    "error": {
+      "connect_failed": "Could not pair or connect. Put the speaker in pairing mode and try again."
+    },
+    "abort": {
+      "nothing_found": "No speaker found. Check that it is in pairing mode and close to the Bluetooth adapter, then scan again.",
+      "nothing_paired": "No paired speaker.",
+      "scan_failed": "Scan failed: {loi}",
+      "forget_failed": "Could not forget the speaker: {loi}"
+    }
+  },
+  "entity": {
+    "media_player": {
+      "all_speakers": {
+        "name": "All Bluetooth speakers"
+      }
+    }
+  }
+}

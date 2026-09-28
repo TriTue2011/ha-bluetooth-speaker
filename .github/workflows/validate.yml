@@ -1,0 +1,36 @@
+name: Validate
+
+# Two checks Home Assistant and HACS themselves use — they catch what breaks an
+# install (bad manifest, missing translations, services.yaml, repo metadata).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Run hassfest
+        uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+          # Not listed in home-assistant/brands yet: HACS shows a generic icon.
+          ignore: brands
