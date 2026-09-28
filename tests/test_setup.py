@@ -169,3 +169,42 @@ async def test_nhom_phat_ra_moi_loa_dang_noi(hass, client):
             blocking=True)
     assert sorted(d.ten for d in LuotGia.ds[-1].dich) == sorted([D50, JBL])
     assert hass.states.get("media_player.jbl_go").state == "playing"
+
+
+async def test_loa_ban_luc_chuyen_bai_thi_cho_roi_mo_lai(hass, client):
+    """Bài cũ vừa dừng, bluez-alsa chưa nhả cổng phát: lần mở đầu báo busy, lần sau được."""
+    from custom_components.bluetooth_speaker.bluez import BluezError
+
+    lan = []
+    goc = client.open_pcm
+
+    async def mo(path):
+        lan.append(path)
+        if len(lan) < 3:
+            raise BluezError("org.freedesktop.DBus.Error.Failed: Device or resource busy")
+        return await goc(path)
+
+    client.open_pcm = mo
+    LuotGia.ds.clear()
+    with mock.patch("custom_components.bluetooth_speaker.LuotPhat", LuotGia):
+        await _nap(hass)
+        await hass.services.async_call("media_player", "play_media", {
+            "entity_id": "media_player.d50s", "media_content_id": "http://x/bai2.mp3",
+            "media_content_type": "music"}, blocking=True)
+    assert len(lan) == 3 and LuotGia.ds[-1].url == "http://x/bai2.mp3"
+
+
+async def test_loa_ban_mai_thi_bao_ro(hass, client):
+    from custom_components.bluetooth_speaker.bluez import BluezError
+    from homeassistant.exceptions import HomeAssistantError
+
+    async def mo(path):
+        raise BluezError("org.freedesktop.DBus.Error.Failed: Device or resource busy")
+
+    client.open_pcm = mo
+    with mock.patch("custom_components.bluetooth_speaker._CHO_NHA_GIAY", 0.3):
+        await _nap(hass)
+        with pytest.raises(HomeAssistantError, match="in use by another program"):
+            await hass.services.async_call("media_player", "play_media", {
+                "entity_id": "media_player.d50s", "media_content_id": "http://x/b.mp3",
+                "media_content_type": "music"}, blocking=True)

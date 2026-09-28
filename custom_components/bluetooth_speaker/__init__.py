@@ -8,6 +8,7 @@ Configure của tích hợp; Bật / Tắt ``media_player`` của loa = kết n�
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections.abc import Callable
@@ -28,6 +29,8 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.MEDIA_PLAYER]
 #: Tín hiệu D-Bus tới dồn (một lần kết nối = vài tín hiệu) — gom lại rồi mới làm mới.
 _GOM_GIAY = 1.0
+#: Loa còn "bận" (lượt trước vừa nhả) thì thử mở lại trong ngần này giây.
+_CHO_NHA_GIAY = 2.0
 #: Làm mới định kỳ phòng khi lỡ tín hiệu.
 _DINH_KY = timedelta(seconds=30)
 
@@ -112,7 +115,7 @@ class Hub:
                     _LOGGER.warning("%s: %s Hz/%s ch differs from %s — skipped in this group",
                                     p.address, p.sampling, p.channels, mau.address)
                     continue
-                fd, fd_ctl = await self.client.open_pcm(p.path)
+                fd, fd_ctl = await self._mo_loa(p.path)
                 dich.append(Dich(ten=p.address, fd=fd, fd_ctl=fd_ctl))
         except BluezError as exc:
             _dong(dich)
@@ -131,6 +134,21 @@ class Hub:
         luot.bat_dau()
         for cb in list(self._nghe):
             cb()
+
+    async def _mo_loa(self, path: str) -> tuple[int, int]:
+        """Mở cổng phát; loa còn "bận" thì chờ rồi mở lại.
+
+        Chuyển bài khi bài cũ đang phát (bấm Next, playlist tự sang bài): lượt cũ vừa đóng fd
+        nhưng bluez-alsa nhả cổng phát chậm hơn một chút — mở ngay là "Device or resource
+        busy" (gặp thật 28/09/2026, playlist YouTube dừng hẳn vì lỗi này)."""
+        het = self.hass.loop.time() + _CHO_NHA_GIAY
+        while True:
+            try:
+                return await self.client.open_pcm(path)
+            except BluezError as exc:
+                if "busy" not in str(exc).lower() or self.hass.loop.time() >= het:
+                    raise
+            await asyncio.sleep(0.2)
 
     @callback
     def _het_luot(self, key: str, luot: LuotPhat) -> None:
