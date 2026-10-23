@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 - 2026-10-24
+
+- Icon riêng cho tích hợp trong Home Assistant (`brand/`: loa hộp kèm huy hiệu Bluetooth, có bản cho nền tối).
+  Home Assistant có hỗ trợ thư mục `brand/` tự nạp (đã thấy trong 2026.10.3; bản cũ hơn chưa kiểm). Không đổi mã.
+
 ## 0.1.1 - 2026-09-28
 
 - Chuyển bài không còn làm playlist dừng hẳn: bài cũ vừa dừng thì bluez-alsa nhả loa chậm hơn
