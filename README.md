@@ -1,5 +1,7 @@
 # 🔊 Bluetooth Speaker — phát ra loa Bluetooth từ Home Assistant, không cần add-on
 
+[![Mở kho này trong HACS của bạn.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TriTue2011&repository=ha-bluetooth-speaker&category=integration)
+
 Tích hợp tuỳ chỉnh (HACS) biến **mỗi loa Bluetooth** (A2DP: loa, soundbar, tai nghe) thành một
 `media_player` của Home Assistant, cộng một `media_player` **nhóm phát cùng lúc ra nhiều loa**.
 Không cần add-on, không cần MPD, PulseAudio hay PipeWire — chạy với **HA Container** (Docker),
