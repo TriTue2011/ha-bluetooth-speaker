@@ -7,6 +7,7 @@ Phát (``play_media``, ``tts.speak``) trả về ngay khi bắt đầu — bài 
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components import media_source
@@ -31,6 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _TINH_NANG_CHUNG = (MediaPlayerEntityFeature.PLAY_MEDIA
                     | MediaPlayerEntityFeature.STOP
+                    | MediaPlayerEntityFeature.SEEK
                     | MediaPlayerEntityFeature.VOLUME_SET
                     | MediaPlayerEntityFeature.VOLUME_MUTE
                     | MediaPlayerEntityFeature.BROWSE_MEDIA
@@ -145,6 +147,25 @@ class LoaPlayer(_Goc):
     async def async_media_stop(self) -> None:
         await self.hub.async_stop(address=self.address)
 
+    def _luot(self):
+        return self.hub.luot_cua(self.address)
+
+    @property
+    def media_position(self) -> float | None:
+        c = self._luot()
+        return c[1].vi_tri_goc if c else None
+
+    @property
+    def media_position_updated_at(self) -> datetime | None:
+        c = self._luot()
+        return c[1].luc if c else None
+
+    async def async_media_seek(self, position: float) -> None:
+        c = self._luot()
+        if c is None:
+            raise HomeAssistantError("nothing is playing, so there is nothing to seek")
+        await self.hub.async_seek(c[0], position)
+
     async def async_set_volume_level(self, volume: float) -> None:
         await self.hub.async_set_volume(self.address, so_am_luong(volume, False))
 
@@ -194,6 +215,19 @@ class NhomPlayer(_Goc):
 
     async def async_media_stop(self) -> None:
         await self.hub.async_stop(key=NHOM)
+
+    @property
+    def media_position(self) -> float | None:
+        l = self.hub.luot.get(NHOM)
+        return l.vi_tri_goc if l and not l.xong.is_set() else None
+
+    @property
+    def media_position_updated_at(self) -> datetime | None:
+        l = self.hub.luot.get(NHOM)
+        return l.luc if l and not l.xong.is_set() else None
+
+    async def async_media_seek(self, position: float) -> None:
+        await self.hub.async_seek(NHOM, position)
 
     async def async_set_volume_level(self, volume: float) -> None:
         for a in list(self.hub.pcm):

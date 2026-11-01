@@ -16,6 +16,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,8 +40,13 @@ class LuotPhat:
     """``bat_dau()`` chạy nền; ``dung()`` cắt ngang; ``xong`` báo khi hết (tự nhiên hay bị cắt)."""
 
     def __init__(self, ffmpeg: str, nguon: str, dich: list[Dich], *, sampling: int = 48000,
-                 channels: int = 2, khi_xong: Callable[[LuotPhat], None] | None = None) -> None:
+                 channels: int = 2, khi_xong: Callable[[LuotPhat], None] | None = None,
+                 tu_giay: float = 0.0) -> None:
         self.ffmpeg, self.nguon, self.dich = ffmpeg, nguon, dich
+        #: Vị trí (giây) của bài tại ``luc`` — cặp này là thứ HA cần để thanh tiến độ tự chạy (``media_position`` + ``media_position_updated_at``).
+        #: Loa phát đúng nhịp thời gian thực nên không cần cập nhật lại giữa chừng.
+        self.vi_tri_goc = max(0.0, float(tu_giay))
+        self.luc: datetime | None = None
         self.sampling, self.channels = sampling, channels
         self._khi_xong = khi_xong
         self._proc: subprocess.Popen | None = None
@@ -50,6 +56,7 @@ class LuotPhat:
         self._luong = threading.Thread(target=self._chay, name="bluetooth-speaker", daemon=True)
 
     def bat_dau(self) -> None:
+        self.luc = datetime.now(UTC)
         self._luong.start()
 
     def dung(self) -> None:
@@ -62,7 +69,9 @@ class LuotPhat:
         return self.xong.wait(timeout)
 
     def _lenh(self) -> list[str]:
-        return [self.ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error",
+        # Tua = vào nguồn ở giây ``vi_tri_goc`` (-ss ĐẶT TRƯỚC -i: nhảy thẳng tới đó thay vì giải mã rồi bỏ đoạn đầu).
+        tua = ["-ss", f"{self.vi_tri_goc:.3f}"] if self.vi_tri_goc > 0 else []
+        return [self.ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", *tua,
                 "-i", self.nguon, "-vn", "-ac", str(self.channels), "-ar", str(self.sampling),
                 "-f", "s16le", "pipe:1"]
 

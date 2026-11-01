@@ -1,9 +1,11 @@
 """Tích hợp trong HA thử: thêm, thực thể, phát, bật/tắt, Configure — BlueZ giả lập."""
 
+from datetime import UTC, datetime
 from unittest import mock
 
 import pytest
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -73,8 +75,9 @@ def client():
 class LuotGia:
     ds: list = []
 
-    def __init__(self, ffmpeg, url, dich, *, sampling, channels, khi_xong):
-        self.url, self.dich = url, dich
+    def __init__(self, ffmpeg, url, dich, *, sampling, channels, khi_xong, tu_giay=0.0):
+        self.url, self.nguon, self.dich = url, url, dich
+        self.vi_tri_goc, self.luc = tu_giay, datetime.now(UTC)
         import threading
         self.xong = threading.Event()
         LuotGia.ds.append(self)
@@ -208,3 +211,60 @@ async def test_loa_ban_mai_thi_bao_ro(hass, client):
             await hass.services.async_call("media_player", "play_media", {
                 "entity_id": "media_player.d50s", "media_content_id": "http://x/b.mp3",
                 "media_content_type": "music"}, blocking=True)
+
+
+async def test_tua_khoi_dong_lai_luot_phat_dung_cho_va_bao_vi_tri(hass, client):
+    LuotGia.ds.clear()
+    with mock.patch("custom_components.bluetooth_speaker.LuotPhat", LuotGia):
+        await _nap(hass)
+        eid = "media_player.d50s"
+        assert hass.states.get(eid).attributes["supported_features"] & 2           # bit 2 = SEEK: thẻ YouTube chỉ gửi media_seek cho loa có bit này
+        await hass.services.async_call("media_player", "play_media", {
+            "entity_id": eid, "media_content_id": "http://x/bai.m4a", "media_content_type": "music"}, blocking=True)
+        cu = LuotGia.ds[-1]
+        assert cu.vi_tri_goc == 0.0
+        await hass.services.async_call("media_player", "media_seek", {"entity_id": eid, "seek_position": 42}, blocking=True)
+        moi = LuotGia.ds[-1]
+        assert moi is not cu and cu.xong.is_set()                                   # lượt cũ dừng, lượt mới thay
+        assert moi.url == "http://x/bai.m4a" and moi.vi_tri_goc == 42 and [d.ten for d in moi.dich] == [D50]
+        a = hass.states.get(eid).attributes
+        assert a["media_position"] == 42 and a["media_position_updated_at"] is not None
+        assert hass.states.get(eid).state == "playing"
+
+
+async def test_tua_loa_dang_phat_theo_nhom_giu_nguyen_nhom(hass, client):
+    LuotGia.ds.clear()
+    with mock.patch("custom_components.bluetooth_speaker.LuotPhat", LuotGia):
+        await _nap(hass)
+        nhom = "media_player.bluetooth_speaker_all_bluetooth_speakers"
+        await hass.services.async_call("media_player", "play_media", {
+            "entity_id": nhom, "media_content_id": "http://x/b.m4a", "media_content_type": "music"}, blocking=True)
+        # tua từ chính loa: lượt đang phát thuộc nhóm nên tua cả lượt, không tách loa ra
+        await hass.services.async_call("media_player", "media_seek", {"entity_id": "media_player.d50s", "seek_position": 10}, blocking=True)
+        moi = LuotGia.ds[-1]
+        assert moi.vi_tri_goc == 10 and [d.ten for d in moi.dich] == [D50]
+        assert hass.states.get(nhom).attributes["media_position"] == 10
+
+
+async def test_tua_khi_khong_phat_gi_thi_bao_loi_ro(hass, client):
+    LuotGia.ds.clear()
+    with mock.patch("custom_components.bluetooth_speaker.LuotPhat", LuotGia):
+        await _nap(hass)
+        with pytest.raises(HomeAssistantError, match="nothing"):
+            await hass.services.async_call("media_player", "media_seek", {
+                "entity_id": "media_player.d50s", "seek_position": 5}, blocking=True)
+
+
+async def test_tua_sau_khi_bai_vua_het_thi_khong_phat_lai_bai_cu(hass, client):
+    """Bài hết (lượt đã xong) nhưng chưa kịp bị gỡ khỏi bảng: bấm tua không được hồi sinh bài đã hết."""
+    LuotGia.ds.clear()
+    with mock.patch("custom_components.bluetooth_speaker.LuotPhat", LuotGia):
+        await _nap(hass)
+        eid = "media_player.d50s"
+        await hass.services.async_call("media_player", "play_media", {
+            "entity_id": eid, "media_content_id": "http://x/b.m4a", "media_content_type": "music"}, blocking=True)
+        so_luot = len(LuotGia.ds)
+        LuotGia.ds[-1].xong.set()
+        with pytest.raises(HomeAssistantError, match="nothing"):
+            await hass.services.async_call("media_player", "media_seek", {"entity_id": eid, "seek_position": 5}, blocking=True)
+        assert len(LuotGia.ds) == so_luot

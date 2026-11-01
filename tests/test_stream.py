@@ -118,3 +118,35 @@ def test_dung_giua_chung(tmp_path):
     assert luot.cho(5) and xong == [luot]
     loa[2].join(2)
     assert not loa[2].is_alive()                           # fd loa đã đóng
+
+
+def _ffmpeg_ghi_doi_so(tmp_path: Path, so_byte: int) -> tuple[str, Path]:
+    """ffmpeg giả ghi lại dòng lệnh nó được gọi, rồi in đúng ``so_byte`` byte PCM."""
+    nhat_ky = tmp_path / "doi_so.txt"
+    p = tmp_path / "ffmpeg"
+    p.write_text(f"#!{sys.executable}\nimport sys\nopen({str(nhat_ky)!r}, 'w').write(' '.join(sys.argv[1:]))\n"
+                 f"sys.stdout.buffer.write(b'\\x01\\x02' * {so_byte // 2})\n")
+    p.chmod(p.stat().st_mode | stat.S_IEXEC)
+    return str(p), nhat_ky
+
+
+def test_tua_dua_ss_truoc_nguon_va_nho_vi_tri_bat_dau(tmp_path):
+    ffmpeg, nhat_ky = _ffmpeg_ghi_doi_so(tmp_path, 9600)
+    loa = _loa("A")
+    luot = LuotPhat(ffmpeg, "http://x/bai.m4a", [loa[0]], tu_giay=42.5)
+    luot.bat_dau()
+    assert luot.cho(10)
+    lenh = nhat_ky.read_text().split()
+    assert lenh[lenh.index("-ss") + 1] == "42.500" and lenh.index("-ss") < lenh.index("-i")   # tua theo đầu vào: nhanh, không giải mã đoạn bỏ qua
+    loa[2].join(2)
+    assert luot.vi_tri_goc == 42.5 and luot.luc is not None
+
+
+def test_khong_tua_thi_khong_co_ss(tmp_path):
+    ffmpeg, nhat_ky = _ffmpeg_ghi_doi_so(tmp_path, 9600)
+    loa = _loa("A")
+    luot = LuotPhat(ffmpeg, "x", [loa[0]])
+    luot.bat_dau()
+    assert luot.cho(10)
+    loa[2].join(2)
+    assert "-ss" not in nhat_ky.read_text().split() and luot.vi_tri_goc == 0.0

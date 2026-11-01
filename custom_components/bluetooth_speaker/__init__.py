@@ -96,7 +96,7 @@ class Hub:
     def dang_phat(self, key: str) -> bool:
         return key in self.luot and not self.luot[key].xong.is_set()
 
-    async def async_play(self, key: str, addresses: list[str], url: str) -> None:
+    async def async_play(self, key: str, addresses: list[str], url: str, tu_giay: float = 0.0) -> None:
         """Phát ``url`` ra các loa ``addresses``; ``key`` = thực thể sở hữu lượt ("nhom" / địa chỉ).
 
         Loa đang ở lượt khác thì lượt đó dừng trước (một loa một lúc một nguồn)."""
@@ -129,11 +129,25 @@ class Hub:
             self.hass.loop.call_soon_threadsafe(self._het_luot, key, _l)
 
         luot = LuotPhat(self.ffmpeg, url, dich, sampling=mau.sampling, channels=mau.channels,
-                        khi_xong=_xong)
+                        khi_xong=_xong, tu_giay=tu_giay)
         self.luot[key] = luot
         luot.bat_dau()
         for cb in list(self._nghe):
             cb()
+
+    def luot_cua(self, address: str) -> tuple[str, LuotPhat] | None:
+        """Lượt đang phát có loa này (của riêng nó hoặc của nhóm)."""
+        for k, l in self.luot.items():
+            if not l.xong.is_set() and any(d.ten == address and not d.loi for d in l.dich):
+                return k, l
+        return None
+
+    async def async_seek(self, key: str, giay: float) -> None:
+        """Tua = phát lại CÙNG nguồn, cùng các loa còn nối, từ giây ``giay`` (loa Bluetooth không tự tua được: nguồn do HA giải mã và đẩy sang)."""
+        l = self.luot.get(key)
+        if l is None or l.xong.is_set():
+            raise HomeAssistantError("nothing is playing, so there is nothing to seek")
+        await self.async_play(key, [d.ten for d in l.dich if not d.loi], l.nguon, max(0.0, giay))
 
     async def _mo_loa(self, path: str) -> tuple[int, int]:
         """Mở cổng phát; loa còn "bận" thì chờ rồi mở lại.
