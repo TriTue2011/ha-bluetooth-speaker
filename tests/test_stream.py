@@ -150,3 +150,63 @@ def test_khong_tua_thi_khong_co_ss(tmp_path):
     assert luot.cho(10)
     loa[2].join(2)
     assert "-ss" not in nhat_ky.read_text().split() and luot.vi_tri_goc == 0.0
+
+
+def test_nguon_http_tu_noi_lai_khi_dut_giua_chung_con_tep_cuc_bo_thi_khong(tmp_path):
+    """Luồng HTTP rớt giữa bài mà ffmpeg không nối lại thì bài kết thúc im lặng («YouTube tự ngắt»)."""
+    for nguon, co in (("http://x/bai.m4a", True), ("https://x/bai.m4a", True), ("/tmp/bai.mp3", False)):
+        ffmpeg, nhat_ky = _ffmpeg_ghi_doi_so(tmp_path, 9600)
+        loa = _loa("A")
+        luot = LuotPhat(ffmpeg, nguon, [loa[0]])
+        luot.bat_dau()
+        assert luot.cho(10)
+        loa[2].join(2)
+        lenh = nhat_ky.read_text().split()
+        assert ("-reconnect" in lenh) is co, nguon
+        if co:
+            assert lenh[lenh.index("-reconnect_streamed") + 1] == "1" and "-reconnect_delay_max" in lenh
+            assert lenh.index("-reconnect") < lenh.index("-i")                    # tuỳ chọn đầu vào phải đứng trước -i
+
+
+def _ffmpeg_thoat(tmp_path: Path, ma: int, loi: str = "") -> str:
+    p = tmp_path / "ffmpeg"
+    p.write_text(f"#!{sys.executable}\nimport sys\nsys.stdout.buffer.write(b'\\x01\\x02' * 4800)\n"
+                 f"sys.stderr.write({loi!r})\nsys.exit({ma})\n")
+    p.chmod(p.stat().st_mode | stat.S_IEXEC)
+    return str(p)
+
+
+def test_ly_do_ket_thuc_het_bai_loi_dung_va_bi_thay(tmp_path):
+    loa = _loa("A")
+    het = LuotPhat(_ffmpeg_thoat(tmp_path, 0), "x", [loa[0]])
+    het.bat_dau()
+    assert het.cho(10) and het.ly_do == "finished"
+    loa[2].join(2)
+
+    loa = _loa("B")
+    hong = LuotPhat(_ffmpeg_thoat(tmp_path, 1, "Connection reset by peer"), "x", [loa[0]])
+    hong.bat_dau()
+    assert hong.cho(10) and hong.ly_do == "error"                      # ffmpeg thoát mã khác 0 giữa chừng = luồng đứt, không phải hết bài
+    loa[2].join(2)
+
+    p = tmp_path / "lau"
+    p.write_text(f"#!{sys.executable}\nimport sys, time\nwhile True:\n    sys.stdout.buffer.write(b'\\0' * 19200); sys.stdout.flush(); time.sleep(0.1)\n")
+    p.chmod(p.stat().st_mode | stat.S_IEXEC)
+    for cach, mong in ((None, "stopped"), ("interrupted", "interrupted")):
+        loa = _loa("C")
+        luot = LuotPhat(str(p), "x", [loa[0]])
+        luot.bat_dau()
+        assert not luot.cho(0.3)
+        luot.dung() if cach is None else luot.dung(cach)
+        assert luot.cho(5) and luot.ly_do == mong
+        loa[2].join(2)
+
+
+def test_moi_loa_rot_het_thi_la_loi_khong_phai_het_bai(tmp_path):
+    r, w = os.pipe()
+    os.close(r)
+    a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    b.close()
+    luot = LuotPhat(_ffmpeg_thoat(tmp_path, 0), "x", [Dich(ten="rot", fd=w, fd_ctl=a.detach())])
+    luot.bat_dau()
+    assert luot.cho(10) and luot.ly_do == "error"

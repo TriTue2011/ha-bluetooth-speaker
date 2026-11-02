@@ -46,6 +46,8 @@ class Hub:
         self.pcm: dict[str, Pcm] = {}
         #: address (hoặc "nhom") → lượt đang phát ra loa đó
         self.luot: dict[str, LuotPhat] = {}
+        #: lý do kết thúc của lượt gần nhất theo khoá (địa chỉ loa hoặc nhóm): thuộc tính ``idle_reason`` của thực thể
+        self.ly_do_cuoi: dict[str, str | None] = {}
         self._nghe: list[Callable[[], None]] = []
         self._hen = None
         self._bao_thieu_bluealsa = False
@@ -102,7 +104,7 @@ class Hub:
         Loa đang ở lượt khác thì lượt đó dừng trước (một loa một lúc một nguồn)."""
         for k, l in list(self.luot.items()):
             if k == key or any(d.ten in addresses for d in l.dich):
-                l.dung()
+                l.dung("interrupted")                   # bài mới thay bài đang phát
                 await self.hass.async_add_executor_job(l.cho, 3)
         pcms = [self.pcm[a] for a in addresses if a in self.pcm]
         if not pcms:
@@ -168,6 +170,10 @@ class Hub:
     def _het_luot(self, key: str, luot: LuotPhat) -> None:
         if self.luot.get(key) is luot:
             del self.luot[key]
+            # Ghi lý do CHỈ khi lượt này vẫn là lượt hiện tại của khoá (bị thay rồi thì lượt mới đang chạy, lý do cũ hết nghĩa).
+            self.ly_do_cuoi[key] = luot.ly_do
+            for d in luot.dich:
+                self.ly_do_cuoi[d.ten] = luot.ly_do
         for cb in list(self._nghe):
             cb()
 

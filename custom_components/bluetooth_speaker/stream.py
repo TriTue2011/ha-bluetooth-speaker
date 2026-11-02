@@ -51,6 +51,11 @@ class LuotPhat:
         self._khi_xong = khi_xong
         self._proc: subprocess.Popen | None = None
         self._dung = threading.Event()
+        self._ly_do_dung = "stopped"
+        #: Vì sao lượt kết thúc (chỉ có sau khi ``xong``): ``finished`` hết bài · ``error`` ffmpeg thoát lỗi / mọi loa rớt / không chạy được ·
+        #: ``stopped`` bị dừng · ``interrupted`` bị bài khác thay. Tích hợp YouTube đọc nó qua ``idle_reason`` của thực thể: thiếu thì nó coi
+        #: «loa im giữa bài» là người dùng bấm Dừng và gỡ loa khỏi phiên (= «nhạc tự ngắt»).
+        self.ly_do: str | None = None
         self.xong = threading.Event()
         self.giay = 0.0
         self._luong = threading.Thread(target=self._chay, name="bluetooth-speaker", daemon=True)
@@ -59,7 +64,9 @@ class LuotPhat:
         self.luc = datetime.now(UTC)
         self._luong.start()
 
-    def dung(self) -> None:
+    def dung(self, ly_do: str = "stopped") -> None:
+        if not self._dung.is_set():
+            self._ly_do_dung = ly_do                    # lý do đầu tiên thắng
         self._dung.set()
         p = self._proc
         if p is not None and p.poll() is None:
@@ -71,7 +78,11 @@ class LuotPhat:
     def _lenh(self) -> list[str]:
         # Tua = vào nguồn ở giây ``vi_tri_goc`` (-ss ĐẶT TRƯỚC -i: nhảy thẳng tới đó thay vì giải mã rồi bỏ đoạn đầu).
         tua = ["-ss", f"{self.vi_tri_goc:.3f}"] if self.vi_tri_goc > 0 else []
-        return [self.ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", *tua,
+        # Nguồn HTTP: máy phát YouTube chỉ trả từng khúc; kết nối rớt giữa bài (đọc theo nhịp phát nên một kết nối sống hàng chục phút)
+        # mà ffmpeg không nối lại thì bài kết thúc im lặng. Nối lại bằng Range từ đúng byte đã đọc; tuỳ chọn đầu vào phải đứng TRƯỚC -i.
+        noi_lai = (["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"]
+                   if self.nguon.lower().startswith(("http://", "https://")) else [])
+        return [self.ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", *tua, *noi_lai,
                 "-i", self.nguon, "-vn", "-ac", str(self.channels), "-ar", str(self.sampling),
                 "-f", "s16le", "pipe:1"]
 
@@ -80,6 +91,7 @@ class LuotPhat:
         con = list(self.dich)
         for d in con:
             os.set_blocking(d.fd, True)
+        ly_do = "error"                                 # mặc định nếu thoát bằng ngoại lệ
         try:
             self._proc = subprocess.Popen(self._lenh(), stdin=subprocess.DEVNULL,
                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -98,13 +110,22 @@ class LuotPhat:
             if self._proc.poll() is None and self._dung.is_set():
                 self._proc.kill()
             loi = (self._proc.stderr.read() or b"").decode("utf-8", "replace").strip()
-            if self._proc.wait() and not self._dung.is_set() and loi:
+            ma = self._proc.wait()
+            if ma and not self._dung.is_set() and loi:
                 _LOGGER.warning("cannot play %s: %s", self.nguon[:120], loi.splitlines()[-1][:200])
+            if self._dung.is_set():
+                ly_do = self._ly_do_dung
+            elif ma != 0 or not con:                    # ffmpeg thoát lỗi giữa chừng, hoặc mọi loa đã rớt: luồng đứt, KHÔNG phải hết bài
+                ly_do = "error"
+            else:
+                ly_do = "finished"
             if not self._dung.is_set():
                 _drain([d.fd_ctl for d in con])
         except OSError as exc:
             _LOGGER.warning("cannot start ffmpeg: %s", exc)
         finally:
+            self.ly_do = ly_do
+            _LOGGER.info("playback to %s ended (%s) after %.0f s", ",".join(d.ten for d in self.dich), ly_do, self.giay)
             for d in self.dich:
                 for fd in (d.fd, d.fd_ctl):
                     try:

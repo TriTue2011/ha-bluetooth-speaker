@@ -151,6 +151,14 @@ class LoaPlayer(_Goc):
         return self.hub.luot_cua(self.address)
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """``idle_reason`` khi idle: ``finished`` / ``stopped`` / ``interrupted`` / ``error``. Tích hợp YouTube đọc nó để phân biệt hết bài, Dừng và luồng đứt
+        (không có thì nó đoán «loa im giữa bài» = Dừng và gỡ loa khỏi phiên)."""
+        if self.state == MediaPlayerState.IDLE and (ly_do := self.hub.ly_do_cuoi.get(self.address)):
+            return {"idle_reason": ly_do}
+        return None
+
+    @property
     def media_position(self) -> float | None:
         c = self._luot()
         return c[1].vi_tri_goc if c else None
@@ -194,11 +202,6 @@ class NhomPlayer(_Goc):
         return MediaPlayerState.PLAYING if self.hub.dang_phat(NHOM) else MediaPlayerState.IDLE
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return {"speakers": [self.hub.loa[a].name if a in self.hub.loa else a
-                             for a in self.hub.pcm]}
-
-    @property
     def volume_level(self) -> float | None:
         muc = [muc_am_luong(p.volume)[0] for p in self.hub.pcm.values()]
         return max(muc) if muc else None
@@ -215,6 +218,13 @@ class NhomPlayer(_Goc):
 
     async def async_media_stop(self) -> None:
         await self.hub.async_stop(key=NHOM)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        a: dict[str, Any] = {"speakers": [self.hub.loa[x].name if x in self.hub.loa else x for x in self.hub.pcm]}
+        if self.state == MediaPlayerState.IDLE and (ly_do := self.hub.ly_do_cuoi.get(NHOM)):
+            a["idle_reason"] = ly_do
+        return a
 
     @property
     def media_position(self) -> float | None:

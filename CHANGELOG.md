@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 - 2026-11-02
+
+- **Nhạc dài không còn tự ngắt im lặng.** Nguồn HTTP (luồng YouTube qua máy phát) nay chạy ffmpeg với `-reconnect 1 -reconnect_streamed 1
+  -reconnect_delay_max 5`: kết nối rớt giữa bài thì nối lại từ đúng byte đã đọc thay vì kết thúc bài. Loa đọc luồng đúng tốc độ phát nên một
+  kết nối sống hàng chục phút (bài dài hơn 1 giờ báo ngắt sau 3–4 phút), khác với Cast/DLNA tải hết trong vài giây.
+- **Loa khai `idle_reason`** (`finished` hết bài · `stopped` dừng · `interrupted` bị bài khác thay · `error` luồng đứt hoặc mọi loa rớt), cho cả loa
+  lẻ và nhóm. Trước đây thiếu thuộc tính này nên tích hợp YouTube coi «loa im giữa bài» là người dùng bấm Dừng và gỡ loa khỏi phiên.
+- Mỗi lượt phát ghi một dòng nhật ký khi kết thúc (loa nào, lý do, số giây đã phát) để biết vì sao một bài dừng.
+
 ## 0.2.0 - 2026-11-02
 
 - **Tua được.** Loa Bluetooth (và nhóm loa) nay khai báo `SEEK` và báo `media_position` / `media_position_updated_at`.

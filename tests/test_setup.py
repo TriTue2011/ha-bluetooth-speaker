@@ -77,6 +77,7 @@ class LuotGia:
 
     def __init__(self, ffmpeg, url, dich, *, sampling, channels, khi_xong, tu_giay=0.0):
         self.url, self.nguon, self.dich = url, url, dich
+        self.khi_xong, self.ly_do = khi_xong, None
         self.vi_tri_goc, self.luc = tu_giay, datetime.now(UTC)
         import threading
         self.xong = threading.Event()
@@ -84,7 +85,18 @@ class LuotGia:
 
     def bat_dau(self): pass
 
-    def dung(self): self.xong.set()
+    def dung(self, ly_do="stopped"):
+        """Luồng thật khi bị dừng cũng kết thúc rồi gọi khi_xong; bản giả làm đúng thế."""
+        if not self.xong.is_set():
+            self.ly_do = self.ly_do or ly_do
+            self.xong.set()
+            self.khi_xong(self)
+
+    def ket_thuc(self, ly_do):
+        """Lượt tự kết thúc (hết bài / lỗi): như luồng phát thật, báo cho hub qua khi_xong."""
+        self.ly_do = ly_do
+        self.xong.set()
+        self.khi_xong(self)
 
     def cho(self, t=None): return True
 
@@ -268,3 +280,53 @@ async def test_tua_sau_khi_bai_vua_het_thi_khong_phat_lai_bai_cu(hass, client):
         with pytest.raises(HomeAssistantError, match="nothing"):
             await hass.services.async_call("media_player", "media_seek", {"entity_id": eid, "seek_position": 5}, blocking=True)
         assert len(LuotGia.ds) == so_luot
+
+
+async def test_loa_khai_idle_reason_cho_thuc_the_youtube_phan_biet_het_bai_stop_va_loi(hass, client):
+    """Không có idle_reason, tích hợp YouTube coi «loa im giữa bài» là Dừng và gỡ loa khỏi phiên (= «YouTube tự ngắt»)."""
+    LuotGia.ds.clear()
+    with mock.patch("custom_components.bluetooth_speaker.LuotPhat", LuotGia):
+        await _nap(hass)
+        eid = "media_player.d50s"
+
+        async def phat():
+            await hass.services.async_call("media_player", "play_media", {
+                "entity_id": eid, "media_content_id": "http://x/b.m4a", "media_content_type": "music"}, blocking=True)
+
+        await phat()
+        assert "idle_reason" not in hass.states.get(eid).attributes                    # đang phát: không có
+        LuotGia.ds[-1].ket_thuc("finished")
+        await hass.async_block_till_done()
+        st = hass.states.get(eid)
+        assert st.state == "idle" and st.attributes["idle_reason"] == "finished"
+
+        await phat()
+        LuotGia.ds[-1].ket_thuc("error")                                                # luồng đứt
+        await hass.async_block_till_done()
+        assert hass.states.get(eid).attributes["idle_reason"] == "error"
+
+        await phat()
+        await hass.services.async_call("media_player", "media_stop", {"entity_id": eid}, blocking=True)
+        await hass.async_block_till_done()
+        assert hass.states.get(eid).attributes["idle_reason"] == "stopped"
+
+        so_luot = len(LuotGia.ds)
+        await phat()
+        await phat()                                                                    # bài mới thay bài cũ
+        await hass.async_block_till_done()
+        assert LuotGia.ds[so_luot].ly_do == "interrupted"                               # lượt cũ biết mình bị thay, không phải Dừng
+        assert hass.states.get(eid).state == "playing" and "idle_reason" not in hass.states.get(eid).attributes
+        await hass.services.async_call("media_player", "media_stop", {"entity_id": eid}, blocking=True)
+
+
+async def test_loa_phat_theo_nhom_het_bai_thi_thuc_the_tung_loa_cung_khai_ly_do(hass, client):
+    LuotGia.ds.clear()
+    with mock.patch("custom_components.bluetooth_speaker.LuotPhat", LuotGia):
+        await _nap(hass)
+        nhom = "media_player.bluetooth_speaker_all_bluetooth_speakers"
+        await hass.services.async_call("media_player", "play_media", {
+            "entity_id": nhom, "media_content_id": "http://x/b.m4a", "media_content_type": "music"}, blocking=True)
+        LuotGia.ds[-1].ket_thuc("finished")
+        await hass.async_block_till_done()
+        assert hass.states.get(nhom).attributes["idle_reason"] == "finished"
+        assert hass.states.get("media_player.d50s").attributes["idle_reason"] == "finished"      # YouTube theo dõi từng loa, không theo thực thể nhóm
